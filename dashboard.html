@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Expense Dashboard</h1>
+
+<h2>Total Expense: ₹{{total}}</h2>
+
+<h3>Highest Spending Category:
+{{highest_category}} (₹{{highest_amount}})
+</h3>
+
+<p>Suggestion: {{suggestion}}</p>
+
+<a href="/download">Download Report</a>
+
+<h2>Expense Records</h2>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Date</th>
+<th>Category</th>
+<th>Amount</th>
+</tr>
+
+{% for row in data %}
+
+<tr>
+<td>{{row[1]}}</td>
+<td>{{row[2]}}</td>
+<td>{{row[3]}}</td>
+<td>₹{{row[4]}}</td>
+</tr>
+
+{% endfor %}
+
+</table>
+
+<canvas id="pieChart"></canvas>
+
+<script>
+
+let categories = {{ categories | safe }};
+let amounts = {{ amounts | safe }};
+
+new Chart(document.getElementById("pieChart"), {
+
+type: "pie",
+
+data: {
+
+labels: categories,
+
+datasets: [{
+
+data: amounts,
+
+backgroundColor:[
+"#ff6384",
+"#36a2eb",
+"#ffce56",
+"#4caf50",
+"#9966ff"
+]
+
+}]
+
+}
+
+});
+
+</script>
+
+</div>
+
+</body>
+</html>

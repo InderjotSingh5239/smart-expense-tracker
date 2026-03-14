@@ -1,0 +1,40 @@
+body{
+font-family:Arial;
+background:#f4f6f9;
+}
+
+.container{
+width:700px;
+margin:auto;
+background:white;
+padding:30px;
+margin-top:40px;
+border-radius:10px;
+box-shadow:0 0 10px rgba(0,0,0,0.1);
+text-align:center;
+}
+
+input,select{
+padding:10px;
+margin:10px;
+width:80%;
+}
+
+button{
+padding:10px 20px;
+background:#4caf50;
+color:white;
+border:none;
+border-radius:5px;
+}
+
+table{
+width:100%;
+margin-top:20px;
+border-collapse:collapse;
+}
+
+th,td{
+padding:10px;
+border-bottom:1px solid #ddd;
+}
