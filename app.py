@@ -126,9 +126,9 @@ def dashboard():
 
     # budget status
     if total > budget:
-        status = "⚠ You exceeded your budget!"
+        status = "You exceeded your budget!"
     else:
-        status = "✅ You are within your budget."
+        status = " You are within your budget."
 
     return render_template(
         "dashboard.html",
