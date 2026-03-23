@@ -1,23 +1,39 @@
-from flask import Flask, render_template, request, redirect, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import sqlite3
 import pandas as pd
+from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = "monthly_expense_secret_2026"
+
 
 # -------------------------------
-# DATABASE INITIALIZATION
+# DATABASE CONNECTION
 # -------------------------------
+
+def get_db_connection():
+    conn = sqlite3.connect("database.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
 
 def init_db():
+    conn = get_db_connection()
 
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS expenses(
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS profile (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
-        budget REAL,
+        month TEXT,
+        monthly_budget REAL,
+        UNIQUE(name, month)
+    )
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
         date TEXT,
         category TEXT,
         amount REAL
@@ -27,126 +43,167 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 init_db()
 
+
 # -------------------------------
-# HOME PAGE (ADD EXPENSE)
+# HOME / BUDGET SETUP
 # -------------------------------
 
-@app.route("/", methods=["GET","POST"])
+@app.route("/", methods=["GET", "POST"])
 def index():
 
     if request.method == "POST":
 
-        name = request.form["name"]
-        budget = request.form["budget"]
-        date = request.form["date"]
-        category = request.form["category"]
-        amount = request.form["amount"]
+        session['name'] = request.form.get("name")
+        session['selected_month'] = request.form.get("month")
+        budget = request.form.get("budget")
 
-        conn = sqlite3.connect("database.db")
-        cur = conn.cursor()
+        conn = get_db_connection()
 
-        cur.execute(
-        "INSERT INTO expenses(name,budget,date,category,amount) VALUES (?,?,?,?,?)",
-        (name,budget,date,category,amount)
-        )
+        conn.execute("""
+        INSERT OR REPLACE INTO profile (name, month, monthly_budget)
+        VALUES (?, ?, ?)
+        """, (session['name'], session['selected_month'], float(budget)))
 
         conn.commit()
         conn.close()
 
-        return redirect("/dashboard")
+        return redirect(url_for('dashboard'))
 
-    return render_template("index.html")
+    return render_template("budget.html")
 
 
 # -------------------------------
 # DASHBOARD
 # -------------------------------
 
-@app.route("/dashboard")
+@app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
 
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
+    # Update month when form is submitted
+ if request.method == "POST":
+    selected = request.form.get("month")
+    if selected:
+        session['selected_month'] = selected
 
-    # get all records
-    cur.execute("SELECT * FROM expenses")
-    data = cur.fetchall()
+#  Set default month only once
+if 'selected_month' not in session:
+    session['selected_month'] = datetime.now().strftime("%Y-%m")
 
-    # calculate total expenses
-    cur.execute("SELECT SUM(amount) FROM expenses")
-    total = cur.fetchone()[0]
+#  ALWAYS use this (outside if)
+target_month = session['selected_month']
 
-    if total is None:
-        total = 0
+print("DEBUG → Month:", target_month)
 
-    # get budget
-    cur.execute("SELECT budget FROM expenses LIMIT 1")
-    budget_data = cur.fetchone()
+#  Now database logic
+conn = get_db_connection()
 
-    if budget_data:
-        budget = budget_data[0]
-    else:
-        budget = 0
+profile = conn.execute(
+    "SELECT * FROM profile WHERE name=? AND month=?",
+    (session['name'], target_month)
+).fetchone()
 
-    # remaining budget
-    remaining = budget - total
+expenses = conn.execute(
+    "SELECT * FROM expenses WHERE name=? AND date LIKE ? ORDER BY date DESC",
+    (session['name'], f"{target_month}%")
+).fetchall()
 
-    # category analysis
-    cur.execute("SELECT category, SUM(amount) FROM expenses GROUP BY category")
-    category_data = cur.fetchall()
+    category_totals = conn.execute("""
+        SELECT category, SUM(amount) as total
+        FROM expenses
+        WHERE name=? and date LIKE ?
+        GROUP BY category
+        ORDER BY total DESC
+    """, (session['name'], f"{target_month}%",)).fetchall()
 
-    conn.close()
+    # -------------------------------
+    # CALCULATIONS
+    # -------------------------------
 
-    categories = [row[0] for row in category_data]
-    amounts = [row[1] for row in category_data]
+   total_spent = sum(row['total'] for row in category_totals) if category_totals else 0
 
-    # find highest spending category
-    highest_category = ""
-    highest_amount = 0
+budget_val = profile['monthly_budget'] if profile else 0
 
-    for row in category_data:
+remaining = budget_val - total_spent if budget_val else 0
 
-        if row[1] > highest_amount:
-            highest_amount = row[1]
-            highest_category = row[0]
+# STATUS
+if budget_val == 0:
+    status = "No Budget Set"
+elif total_spent <= budget_val:
+    status = "Within Budget"
+else:
+    status = "Over Budget"
 
-    # suggestions
-    suggestion = ""
+# TOP CATEGORY
+highest_category = category_totals[0]['category'] if category_totals else "None"
 
-    if highest_category == "Food":
-        suggestion = "Try cooking at home more often."
-    elif highest_category == "Travel":
-        suggestion = "Use public transport to reduce travel costs."
-    elif highest_category == "Shopping":
-        suggestion = "Avoid impulse buying and set a shopping limit."
-    elif highest_category == "Bills":
-        suggestion = "Try reducing electricity and water usage."
+# SUGGESTION
+if budget_val == 0:
+    suggestion = "Please set a budget first."
+elif total_spent > budget_val:
+    suggestion = f"You've exceeded your limit by ₹{total_spent - budget_val}. Try reducing {highest_category}."
+elif total_spent > (budget_val * 0.8):
+    suggestion = "You've used 80% of your budget. Be careful!"
+else:
+    suggestion = "You're doing great! Your spending is well under control."
 
-    # budget status
-    if total > budget:
-        status = "You exceeded your budget!"
-    else:
-        status = " You are within your budget."
+# CHART DATA
+chart_labels = [row['category'] for row in category_totals]
+chart_values = [row['total'] for row in category_totals]
 
-    return render_template(
-        "dashboard.html",
-        data=data,
-        total=total,
-        budget=budget,
-        remaining=remaining,
-        status=status,
-        categories=categories,
-        amounts=amounts,
-        highest_category=highest_category,
-        highest_amount=highest_amount,
-        suggestion=suggestion
-    )
+conn.close()
+
+return render_template(
+    "dashboard.html",
+    name=session['name'],
+    current_month=target_month,
+    budget=budget_val,
+    total=total_spent,
+    remaining=remaining,
+    status=status,
+    highest_category=highest_category,
+    suggestion=suggestion,
+    data=expenses,
+    categories=chart_labels,
+    amounts=chart_values
+)
+
+# -------------------------------
+# ADD EXPENSE
+# -------------------------------
+
+@app.route("/add-expense", methods=["GET", "POST"])
+def add_expense():
+
+    if 'name' not in session:
+        return redirect(url_for('index'))
+
+    if request.method == "POST":
+
+        date = request.form.get("date")
+        category = request.form.get("category")
+        amount = request.form.get("amount")
+
+        if date and category and amount:
+            conn = get_db_connection()
+
+            conn.execute(
+                "INSERT INTO expenses (name, date, category, amount) VALUES (?, ?, ?, ?)",
+                (session['name'], date, category, float(amount))
+            )
+
+            conn.commit()
+            conn.close()
+
+        return redirect(url_for('dashboard'))
+
+    return render_template("add_expense.html")
 
 
 # -------------------------------
-# DOWNLOAD REPORT
+# DOWNLOAD CSV
 # -------------------------------
 
 @app.route("/download")
@@ -158,15 +215,36 @@ def download():
 
     conn.close()
 
-    file = "expense_report.csv"
+    if df.empty:
+        return "No data to download", 404
 
-    df.to_csv(file, index=False)
+    file_path = "expense_report.csv"
 
-    return send_file(file, as_attachment=True)
+    df.to_csv(file_path, index=False)
+
+    return send_file(file_path, as_attachment=True)
 
 
 # -------------------------------
-# RUN SERVER
+# RESET DATA
+# -------------------------------
+
+@app.route("/reset")
+def reset():
+
+    conn = get_db_connection()
+
+    conn.execute("DELETE FROM expenses")
+    conn.execute("DELETE FROM profile")
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for('index'))
+
+
+# -------------------------------
+# RUN APP
 # -------------------------------
 
 if __name__ == "__main__":
