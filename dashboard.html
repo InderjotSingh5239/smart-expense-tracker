@@ -1,91 +1,127 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-
-<title>Dashboard</title>
-<link rel="stylesheet" href="/static/style.css">
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+    <meta charset="UTF-8">
+    <title>Dashboard - SmartTracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
+    <div class="container animate">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <h2 style="margin: 0;">📊 {{ name }}'s Dashboard</h2>
+            <div style="display: flex; gap: 15px;">
+                <a href="/add-expense" style="color: var(--accent-primary); text-decoration: none; font-weight: bold;">➕ Add Expense</a>
+                <a href="/reset" style="color: var(--accent-danger); text-decoration: none; font-weight: bold;">♻ Reset</a>
+            </div>
+        </header>
 
-<div class="container">
+        <div class="card" style="margin-bottom: 20px;">
+            <form method="POST" style="display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                <label style="font-weight: 600; color: var(--accent-primary);">View Record For:</label>
+                <input type="month" name="month" value="{{ current_month }}" style="width: auto;">
+                <button type="submit" style="width: auto; padding: 10px 25px;">Switch</button>
+            </form>
+        </div>
 
-<h1>Expense Dashboard</h1>
+        {% if budget == 0 %}
+        <div class="card animate" style="border: 2px solid var(--accent-danger); background: rgba(244, 63, 94, 0.1); margin-bottom: 20px;">
+            <p style="margin: 5px 0;">⚠️ <b>Notice:</b> No budget set for <b>{{ current_month }}</b>.</p>
+            <p style="font-size: 0.9rem; margin: 5px 0;">Please <a href="/" style="color: var(--accent-primary); font-weight: bold;">set a budget</a> to start tracking this month.</p>
+        </div>
+        {% endif %}
 
-<h2>Total Expense: ₹{{total}}</h2>
+        <div class="dashboard-grid">
+            <div class="card">
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 10px;">Monthly Budget</p>
+                <h3 style="margin: 0;">₹{{ budget }}</h3>
+            </div>
+            <div class="card">
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 10px;">Total Spent</p>
+                <h3 style="margin: 0; color: var(--accent-danger);">₹{{ total }}</h3>
+            </div>
+            <div class="card">
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 10px;">Remaining</p>
+                <h3 style="margin: 0; color: var(--accent-success);">₹{{ remaining }}</h3>
+            </div>
+        </div>
 
-<h3>Highest Spending Category:
-{{highest_category}} (₹{{highest_amount}})
-</h3>
+        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
 
-<p>Suggestion: {{suggestion}}</p>
+<div class="card">
+    <h3 style="margin-top:0;">Spending Distribution</h3>
 
-<a href="/download">Download Report</a>
+    <div style="max-width:300px; margin:auto;">
+        <canvas id="expenseChart"></canvas>
+    </div>
+</div>
 
-<h2>Expense Records</h2>
+<div class="card">
+    <h3 style="margin-top: 0;">Smart Insights</h3>
 
-<table>
-
-<tr>
-<th>Name</th>
-<th>Date</th>
-<th>Category</th>
-<th>Amount</th>
-</tr>
-
-{% for row in data %}
-
-<tr>
-<td>{{row[1]}}</td>
-<td>{{row[2]}}</td>
-<td>{{row[3]}}</td>
-<td>₹{{row[4]}}</td>
-</tr>
-
-{% endfor %}
-
-</table>
-
-<canvas id="pieChart"></canvas>
-
-<script>
-
-let categories = {{ categories | safe }};
-let amounts = {{ amounts | safe }};
-
-new Chart(document.getElementById("pieChart"), {
-
-type: "pie",
-
-data: {
-
-labels: categories,
-
-datasets: [{
-
-data: amounts,
-
-backgroundColor:[
-"#ff6384",
-"#36a2eb",
-"#ffce56",
-"#4caf50",
-"#9966ff"
-]
-
-}]
-
-}
-
-});
-
-</script>
+    <div style="text-align: left; margin-top: 20px;">
+        <p><b>Status:</b> {{ status }}</p>
+        <p><b>Top Category:</b> {{ highest_category if highest_category else 'None' }}</p>
+        <p style="font-style: italic; color: var(--text-muted); margin-top: 15px;">
+            "{{ suggestion }}"
+        </p>
+    </div>
 
 </div>
 
+</div>
+                <div style="margin-top: 25px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
+                    <a href="/download" style="color: var(--accent-primary); text-decoration: none; font-weight: bold;">📥 Download CSV Report</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="overflow-x: auto;">
+            <h3 style="text-align: left; margin-top: 0;">Transaction History</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr>
+                        <td>{{ row['date'] }}</td>
+                        <td><span style="background: rgba(129, 140, 248, 0.2); padding: 4px 10px; border-radius: 8px; font-size: 0.85rem;">{{ row['category'] }}</span></td>
+                        <td>₹{{ row['amount'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ categories | tojson }},
+                datasets: [{
+                    data: {{ amounts | tojson }},
+                    backgroundColor: ['#818cf8', '#34d399', '#fb7185', '#fbbf24', '#a78bfa'],
+                    hoverOffset: 10,
+                    borderWidth: 0
+                }]
+            },
+            options: { 
+                maintainAspectRatio: true,
+                plugins: { 
+                    legend: { 
+                        position: 'bottom',
+                        labels: { color: '#f8fafc', padding: 20 } 
+                    } 
+                } 
+            }
+        });
+    </script>
 </body>
 </html>
