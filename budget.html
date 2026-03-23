@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Setup - SmartTracker</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="container animate">
+
+<div class="card">
+
+<h1 style="font-size:2.5rem;"></h1>
+<h2>Setup Your Profile</h2>
+<p>Enter your details to begin tracking your expenses.</p>
+
+<form method="POST">
+
+<input type="text" name="name" placeholder="Enter your name" required>
+
+<input type="month" name="month" required>
+
+<input type="number" name="budget" placeholder="Monthly Budget (₹)" required>
+
+<button type="submit">Start Tracking</button>
+
+</form>
+
+</div>
+
+</div>
+
+</body>
+</html>
