@@ -124,7 +124,7 @@ conn.close()
     # CALCULATIONS
     # -------------------------------
 
-   total_spent = sum(row['total'] for row in category_totals) if category_totals else 0
+total_spent = sum(row['total'] for row in category_totals) if category_totals else 0
 
 budget_val = profile['monthly_budget'] if profile else 0
 
