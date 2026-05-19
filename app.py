@@ -110,13 +110,15 @@ expenses = conn.execute(
     (session['name'], f"{target_month}%")
 ).fetchall()
 
-    category_totals = conn.execute("""
+category_totals = conn.execute("""
         SELECT category, SUM(amount) as total
         FROM expenses
-        WHERE name=? and date LIKE ?
+        WHERE name=? AND date LIKE ?
         GROUP BY category
         ORDER BY total DESC
-    """, (session['name'], f"{target_month}%",)).fetchall()
+    """, (st.session_state.name, f"{month}%")).fetchall()
+
+    conn.close()
 
     # -------------------------------
     # CALCULATIONS
