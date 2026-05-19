@@ -118,7 +118,7 @@ category_totals = conn.execute("""
         ORDER BY total DESC
     """, (st.session_state.name, f"{month}%")).fetchall()
 
-    conn.close()
+conn.close()
 
     # -------------------------------
     # CALCULATIONS
