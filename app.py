@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 # -------------------------------
 # DATABASE
@@ -41,7 +42,7 @@ def init_db():
 init_db()
 
 # -------------------------------
-# SESSION STATE (replacement of Flask session)
+# SESSION STATE
 # -------------------------------
 
 if "name" not in st.session_state:
@@ -51,13 +52,19 @@ if "month" not in st.session_state:
     st.session_state.month = datetime.now().strftime("%Y-%m")
 
 # -------------------------------
-# PAGE NAVIGATION
+# SIDEBAR NAVIGATION
 # -------------------------------
 
-page = st.sidebar.selectbox("Navigation", ["Setup Budget", "Dashboard", "Add Expense"])
+st.sidebar.title("💼 Expense Tracker")
+
+page = st.sidebar.radio("Navigation", ["Setup Budget", "Dashboard", "Add Expense"])
+
+# Month Switch
+selected_month = st.sidebar.text_input("📅 Select Month (YYYY-MM)", st.session_state.month)
+st.session_state.month = selected_month
 
 # -------------------------------
-# 1. SETUP BUDGET
+# SETUP BUDGET
 # -------------------------------
 
 if page == "Setup Budget":
@@ -65,53 +72,49 @@ if page == "Setup Budget":
     st.title("💰 Setup Monthly Budget")
 
     name = st.text_input("Enter your name")
-    month = st.text_input("Month (YYYY-MM)", value=st.session_state.month)
     budget = st.number_input("Monthly Budget", min_value=0.0)
 
     if st.button("Save Budget"):
 
         if name and budget > 0:
             st.session_state.name = name
-            st.session_state.month = month
 
             conn = get_db_connection()
             conn.execute("""
                 INSERT OR REPLACE INTO profile (name, month, monthly_budget)
                 VALUES (?, ?, ?)
-            """, (name, month, budget))
+            """, (name, st.session_state.month, budget))
+
             conn.commit()
             conn.close()
 
-            st.success("Budget saved successfully!")
+            st.success("✅ Budget saved!")
 
         else:
-            st.warning("Please enter valid details")
+            st.warning("⚠ Enter valid details")
 
 # -------------------------------
-# 2. DASHBOARD
+# DASHBOARD
 # -------------------------------
 
 elif page == "Dashboard":
 
     if not st.session_state.name:
-        st.warning("Please set up your budget first.")
+        st.warning("⚠ Please setup budget first")
         st.stop()
 
     st.title("📊 Dashboard")
-
-    month = st.text_input("Select Month", value=st.session_state.month)
-    st.session_state.month = month
 
     conn = get_db_connection()
 
     profile = conn.execute(
         "SELECT * FROM profile WHERE name=? AND month=?",
-        (st.session_state.name, month)
+        (st.session_state.name, st.session_state.month)
     ).fetchone()
 
     expenses = conn.execute(
         "SELECT * FROM expenses WHERE name=? AND date LIKE ? ORDER BY date DESC",
-        (st.session_state.name, f"{month}%")
+        (st.session_state.name, f"{st.session_state.month}%")
     ).fetchall()
 
     category_totals = conn.execute("""
@@ -119,78 +122,82 @@ elif page == "Dashboard":
         FROM expenses
         WHERE name=? AND date LIKE ?
         GROUP BY category
-        ORDER BY total DESC
-    """, (st.session_state.name, f"{month}%")).fetchall()
+    """, (st.session_state.name, f"{st.session_state.month}%")).fetchall()
 
     conn.close()
 
-    # Convert to DataFrame
-    df = pd.DataFrame(expenses, columns=["id", "name", "date", "category", "amount"])
+    # FIXED DATAFRAME ✅
+    if expenses:
+        df = pd.DataFrame([dict(row) for row in expenses])
+    else:
+        df = pd.DataFrame(columns=["id", "name", "date", "category", "amount"])
 
-    total_spent = sum(row['total'] for row in category_totals) if category_totals else 0
-    budget_val = profile['monthly_budget'] if profile else 0
-    remaining = budget_val - total_spent if budget_val else 0
+    # Calculations
+    total_spent = sum(row["total"] for row in category_totals) if category_totals else 0
+    budget_val = profile["monthly_budget"] if profile else 0
+    remaining = budget_val - total_spent
 
-    # STATUS
+    # Status
     if budget_val == 0:
-        status = "No Budget Set"
+        status = "No Budget"
     elif total_spent <= budget_val:
-        status = "Within Budget"
+        status = "Within Budget ✅"
     else:
-        status = "Over Budget"
+        status = "Over Budget ❌"
 
-    # TOP CATEGORY
-    highest_category = category_totals[0]['category'] if category_totals else "None"
+    # UI CARDS
+    col1, col2, col3 = st.columns(3)
 
-    # SUGGESTION
-    if budget_val == 0:
-        suggestion = "Please set a budget first."
-    elif total_spent > budget_val:
-        suggestion = f"Exceeded by ₹{total_spent - budget_val}. Reduce {highest_category}."
-    elif total_spent > (budget_val * 0.8):
-        suggestion = "80% budget used. Be careful!"
-    else:
-        suggestion = "You're doing great!"
+    col1.metric("💵 Budget", f"₹{budget_val}")
+    col2.metric("💸 Spent", f"₹{total_spent}")
+    col3.metric("💰 Remaining", f"₹{remaining}")
 
-    # UI
-    st.write(f"### 👤 User: {st.session_state.name}")
-    st.write(f"### 💵 Budget: ₹{budget_val}")
-    st.write(f"### 💸 Spent: ₹{total_spent}")
-    st.write(f"### 💰 Remaining: ₹{remaining}")
-    st.write(f"### ⚠ Status: {status}")
-    st.info(suggestion)
+    st.info(f"📌 Status: {status}")
 
+    # TABLE
     if not df.empty:
         st.subheader("📋 Expenses")
         st.dataframe(df)
 
-        # Chart
-        chart_df = pd.DataFrame(category_totals, columns=["category", "total"])
-        st.subheader("📊 Category Distribution")
+    else:
+        st.warning("No expenses yet")
+
+    # BAR CHART
+    if category_totals:
+        chart_df = pd.DataFrame([dict(row) for row in category_totals])
+
+        st.subheader("📊 Category Wise Spending")
         st.bar_chart(chart_df.set_index("category"))
 
-    else:
-        st.info("No expenses found")
+        # PIE CHART ✅
+        st.subheader("🥧 Expense Distribution")
+
+        fig, ax = plt.subplots()
+        ax.pie(chart_df["total"], labels=chart_df["category"], autopct='%1.1f%%')
+        ax.axis("equal")
+
+        st.pyplot(fig)
 
 # -------------------------------
-# 3. ADD EXPENSE
+# ADD EXPENSE
 # -------------------------------
 
 elif page == "Add Expense":
 
     if not st.session_state.name:
-        st.warning("Please set up your budget first.")
+        st.warning("⚠ Setup budget first")
         st.stop()
 
     st.title("➕ Add Expense")
 
-    date = st.date_input("Select Date")
+    date = st.date_input("Date")
     category = st.text_input("Category")
     amount = st.number_input("Amount", min_value=0.0)
 
-    if st.button("Add Expense"):
+    if st.button("Add"):
 
         if category and amount > 0:
+
             conn = get_db_connection()
             conn.execute(
                 "INSERT INTO expenses (name, date, category, amount) VALUES (?, ?, ?, ?)",
@@ -199,13 +206,13 @@ elif page == "Add Expense":
             conn.commit()
             conn.close()
 
-            st.success("Expense added!")
+            st.success("✅ Expense added")
 
         else:
-            st.warning("Enter valid data")
+            st.warning("⚠ Enter valid data")
 
 # -------------------------------
-# DOWNLOAD CSV
+# DOWNLOAD
 # -------------------------------
 
 st.sidebar.subheader("⬇ Export")
@@ -219,7 +226,7 @@ if st.sidebar.button("Download CSV"):
         df.to_csv("expenses.csv", index=False)
         st.sidebar.success("Downloaded!")
     else:
-        st.sidebar.warning("No data available")
+        st.sidebar.warning("No data")
 
 # -------------------------------
 # RESET
