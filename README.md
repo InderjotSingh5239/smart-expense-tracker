@@ -22,7 +22,7 @@ A modern and user-friendly web application to track daily expenses, manage month
 
 ## Live Demo
 
-[Open Smart Expense Tracker](https://smart-expense-tracker-1-1659.onrender.com)
+[Open Smart Expense Tracker](https://smart-expense-tracker-gazzrcpzmhredkm5srinso.streamlit.app/)
 
 ## Author
 
@@ -30,3 +30,4 @@ A modern and user-friendly web application to track daily expenses, manage month
 BCA Student | AI & ML Enthusiast  
 
 📧 inderjotsingharora31@gmail.com  
+
